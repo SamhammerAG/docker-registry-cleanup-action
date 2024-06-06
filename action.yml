@@ -1,0 +1,26 @@
+name: 'docker-registry-cleanup-action'
+description: 'Action to delete a specific tag from the docker registry'
+author: 'Samhammer AG'
+inputs:
+  registry:
+    description: 'Registry url including protocol (with or without trailing slash)'
+    required: true
+  path:
+    description: 'Path in the docker registry (with or without leading and trailing slashes)'
+    required: true
+  tag:
+    description: 'Name of the tag'
+    required: true
+  ignoreNotFound:
+    description: 'Action does not fail if a tag is not found'
+    default: 'false'
+    required: false
+  username:
+    description: 'The registry username'
+    required: true
+  password:
+    description: 'The registry password'
+    required: true
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
