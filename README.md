@@ -9,11 +9,11 @@ Currently only v2 registries with token auth are supported.
       uses: SamhammerAG/docker-registry-cleanup-action@v1
       with:
         registry: https://myregistry.com
-        path: projectName/appName
+        registry_path: projectName/appName
+        registry_user: myUser
+        registry_password: ${{ secrets.MY_REGISTRY_PASSWORD }}
         tag: 1.0.5
         ignoreNotFound: true
-        username: myUser
-        password: ${{ secrets.MY_REGISTRY_PASSWORD }}
 ```
 
 ## Config
@@ -23,8 +23,8 @@ Currently only v2 registries with token auth are supported.
 | Name | Description | Default |
 | --- | --- | --- |
 | `registry` | The url to the registry including protocol (registry with valid cert required) | `` |
-| `path` | The path to the docker images | "" |
+| `registry_path` | The path to the docker images | "" |
+| `registry_user` | The registry username | "" |
+| `registry_password` | The registry password | "" |
 | `tag` | The name of the tag | "" |
 | `ignoreNotFound` | (Optional) If set to "true" the action does not fail if the tag does not exists | "false" |
-| `username` | The registry username | "" |
-| `password` | The registry password | "" |

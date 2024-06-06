@@ -29710,6 +29710,15 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -29721,121 +29730,121 @@ const http_auth_utils_1 = __nccwpck_require__(3581);
 const utils_1 = __nccwpck_require__(9862);
 class TagNotFoundError extends Error {
 }
-async function run() {
-    const inputs = {
-        registry: trimEndSlash(core.getInput("registry")),
-        path: trimSlash(core.getInput("path")),
-        tag: trimSlash(core.getInput("tag")),
-        ignoreNotFound: core.getBooleanInput("ignoreNotFound"),
-        username: core.getInput("username"),
-        password: core.getInput("password")
-    };
-    try {
-        await deleteTag(inputs.path, inputs.tag, {
-            registry: inputs.registry,
-            credentials: {
-                username: inputs.username,
-                password: inputs.password,
+function run() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const inputs = {
+            registry: prepareUrl(core.getInput("registry")),
+            registry_path: trimSlash(core.getInput("registry_path")),
+            registry_user: core.getInput("registry_user"),
+            registry_password: core.getInput("registry_password"),
+            tag: trimSlash(core.getInput("tag")),
+            ignoreNotFound: core.getBooleanInput("ignoreNotFound")
+        };
+        try {
+            yield deleteTag(inputs.registry_path, inputs.tag, {
+                registry: inputs.registry,
+                credentials: {
+                    username: inputs.registry_user,
+                    password: inputs.registry_password,
+                },
+            });
+        }
+        catch (error) {
+            if (error instanceof TagNotFoundError && inputs.ignoreNotFound) {
+                console.log(error.message);
+            }
+            else {
+                core.setFailed(error.message);
+            }
+        }
+    });
+}
+function deleteTag(path, tagName, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const tagDigest = yield getTagDigest(path, tagName, opts);
+        yield deleteTagByDigest(path, tagDigest, opts);
+    });
+}
+function getTagDigest(path, tagName, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const url = `${path}/manifests/${tagName}`;
+        const response = yield request(url, Object.assign(Object.assign({}, opts), { headers: Object.assign(Object.assign({}, opts.headers), { Accept: "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json" }) }));
+        if (response.status === 404) {
+            throw new TagNotFoundError(`Tag ${tagName} does not exist in ${path} of registry ${opts.registry}`);
+        }
+        if (!response.ok) {
+            const responseText = yield response.text();
+            throw new Error(`Fetching tag infos failed with status ${response.status}: ${responseText}`);
+        }
+        const tagDigest = yield response.headers.get("docker-content-digest");
+        if (!tagDigest) {
+            throw new Error(`Tag digest header of the manifest was empty.`);
+        }
+        return tagDigest;
+    });
+}
+function deleteTagByDigest(path, tagDigest, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const url = `${path}/manifests/${tagDigest}`;
+        const response = yield request(url, Object.assign(Object.assign({}, opts), { method: "DELETE" }));
+        if (response.status === 404) {
+            throw new TagNotFoundError(`Tag digest ${tagDigest} does not exist in ${path} of registry ${opts.registry}`);
+        }
+        if (!response.ok) {
+            const responseText = yield response.text();
+            throw new Error(`Deleting tag failed with status ${response.status}: ${responseText}`);
+        }
+    });
+}
+function request(endpoint, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const url = `${opts.registry}/v2/${endpoint}`;
+        const token = yield getAuthToken(url, opts);
+        const authHeader = (0, http_auth_utils_1.buildAuthorizationHeader)(http_auth_utils_1.BEARER, { hash: token });
+        const agent = new https_1.default.Agent();
+        return yield (0, node_fetch_1.default)(url, Object.assign(Object.assign({}, opts), { agent: agent, headers: Object.assign({ Authorization: authHeader }, opts.headers) }));
+    });
+}
+function getAuthToken(actionUrl, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const authInfos = yield getAuthInfos(actionUrl, opts);
+        const url = `${authInfos.realm}?service=${authInfos.service}&scope=${authInfos.scope}`;
+        const basicAuthHeader = (0, http_auth_utils_1.buildAuthorizationHeader)(http_auth_utils_1.BASIC, {
+            username: opts.credentials.username,
+            password: opts.credentials.password,
+        });
+        const response = yield (0, node_fetch_1.default)(url, {
+            headers: {
+                Authorization: basicAuthHeader,
             },
         });
-    }
-    catch (error) {
-        if (error instanceof TagNotFoundError && inputs.ignoreNotFound) {
-            console.log(error.message);
+        if (!response.ok) {
+            const responseText = yield response.text();
+            throw new Error(`Auth failed with status ${response.status}: ${responseText}`);
         }
-        else {
-            core.setFailed(error.message);
+        const responseJson = (yield response.json());
+        return responseJson.token;
+    });
+}
+function getAuthInfos(actionUrl, opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Url of the action that is executed later. This is required for correct scope
+        const response = yield (0, node_fetch_1.default)(actionUrl, Object.assign({}, opts));
+        const wwwAuthString = response.headers.get("www-authenticate");
+        if (!wwwAuthString) {
+            const responseText = yield response.text();
+            throw new Error(`Could not fetch authentication info from request with status ${response.status}: ${responseText}`);
         }
-    }
-}
-async function deleteTag(path, tagName, opts) {
-    const tagDigest = await getTagDigest(path, tagName, opts);
-    await deleteTagByDigest(path, tagDigest, opts);
-}
-async function getTagDigest(path, tagName, opts) {
-    const url = `${path}/manifests/${tagName}`;
-    const response = await request(url, {
-        ...opts,
-        headers: {
-            ...opts.headers,
-            Accept: "application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json",
-        },
-    });
-    if (response.status === 404) {
-        throw new TagNotFoundError(`Tag ${tagName} does not exist in ${path} of registry ${opts.registry}`);
-    }
-    if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(`Fetching tag infos failed with status ${response.status}: ${responseText}`);
-    }
-    const tagDigest = await response.headers.get("docker-content-digest");
-    if (!tagDigest) {
-        throw new Error(`Tag digest header of the manifest was empty.`);
-    }
-    return tagDigest;
-}
-async function deleteTagByDigest(path, tagDigest, opts) {
-    const url = `${path}/manifests/${tagDigest}`;
-    const response = await request(url, {
-        ...opts,
-        method: "DELETE"
-    });
-    if (response.status === 404) {
-        throw new TagNotFoundError(`Tag digest ${tagDigest} does not exist in ${path} of registry ${opts.registry}`);
-    }
-    if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(`Deleting tag failed with status ${response.status}: ${responseText}`);
-    }
-}
-async function request(endpoint, opts) {
-    const url = `${opts.registry}/v2/${endpoint}`;
-    const token = await getAuthToken(url, opts);
-    const authHeader = (0, http_auth_utils_1.buildAuthorizationHeader)(http_auth_utils_1.BEARER, { hash: token });
-    const agent = new https_1.default.Agent();
-    return await (0, node_fetch_1.default)(url, {
-        ...opts,
-        agent: agent,
-        headers: {
-            Authorization: authHeader,
-            ...opts.headers,
-        },
+        const requiredFields = ["realm", "service", "scope"];
+        return (0, utils_1.parseHTTPHeadersQuotedKeyValueSet)(wwwAuthString, requiredFields);
     });
 }
-async function getAuthToken(actionUrl, opts) {
-    const authInfos = await getAuthInfos(actionUrl, opts);
-    const url = `${authInfos.realm}?service=${authInfos.service}&scope=${authInfos.scope}`;
-    const basicAuthHeader = (0, http_auth_utils_1.buildAuthorizationHeader)(http_auth_utils_1.BASIC, {
-        username: opts.credentials.username,
-        password: opts.credentials.password,
-    });
-    const response = await (0, node_fetch_1.default)(url, {
-        headers: {
-            Authorization: basicAuthHeader,
-        },
-    });
-    if (!response.ok) {
-        const responseText = await response.text();
-        throw new Error(`Auth failed with status ${response.status}: ${responseText}`);
+function prepareUrl(input) {
+    const urlWithoutTrailingSlash = input.replace(/\/$/, '');
+    if (!/^(?:f|ht)tps?:\/\//.test(urlWithoutTrailingSlash)) {
+        return 'https://' + urlWithoutTrailingSlash;
     }
-    const responseJson = (await response.json());
-    return responseJson.token;
-}
-async function getAuthInfos(actionUrl, opts) {
-    // Url of the action that is executed later. This is required for correct scope
-    const response = await (0, node_fetch_1.default)(actionUrl, {
-        ...opts
-    });
-    const wwwAuthString = response.headers.get("www-authenticate");
-    if (!wwwAuthString) {
-        const responseText = await response.text();
-        throw new Error(`Could not fetch authentication info from request with status ${response.status}: ${responseText}`);
-    }
-    const requiredFields = ["realm", "service", "scope"];
-    return (0, utils_1.parseHTTPHeadersQuotedKeyValueSet)(wwwAuthString, requiredFields);
-}
-function trimEndSlash(input) {
-    return input.replace(/\/$/, '');
+    return urlWithoutTrailingSlash;
 }
 function trimSlash(input) {
     return input.replace(/^\/|\/$/g, '');

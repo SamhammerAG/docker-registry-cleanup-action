@@ -17,23 +17,24 @@ interface TokenResponse {
 
 async function run(): Promise<void> {
     const inputs = {
-        registry: trimEndSlash(core.getInput("registry")),
-        path: trimSlash(core.getInput("path")),
+        registry: prepareUrl(core.getInput("registry")),
+        registry_path: trimSlash(core.getInput("registry_path")),
+        registry_user: core.getInput("registry_user"),
+        registry_password: core.getInput("registry_password"),
         tag: trimSlash(core.getInput("tag")),
-        ignoreNotFound: core.getBooleanInput("ignoreNotFound"),
-        username: core.getInput("username"),
-        password: core.getInput("password")
+        ignoreNotFound: core.getBooleanInput("ignoreNotFound")
+
     };
 
     try {
         await deleteTag(
-            inputs.path,
+            inputs.registry_path,
             inputs.tag,
             {
                 registry: inputs.registry,
                 credentials: {
-                    username: inputs.username,
-                    password: inputs.password,
+                    username: inputs.registry_user,
+                    password: inputs.registry_password,
                 },
             }
         );
@@ -164,8 +165,14 @@ async function getAuthInfos(
     return parseHTTPHeadersQuotedKeyValueSet(wwwAuthString, requiredFields);
 }
 
-function trimEndSlash(input: string): string {
-    return input.replace(/\/$/, '');
+function prepareUrl(input: string): string {
+    const urlWithoutTrailingSlash = input.replace(/\/$/, '');
+
+    if (!/^(?:f|ht)tps?:\/\//.test(urlWithoutTrailingSlash)) {
+        return 'https://' + urlWithoutTrailingSlash
+    }
+
+    return urlWithoutTrailingSlash;
 }
 
 function trimSlash(input: string): string {
